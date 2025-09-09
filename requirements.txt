@@ -4,5 +4,3 @@ transformers
 torch
 huggingface_hub
 python-multipart
-pyngrok
-nest-asyncio
