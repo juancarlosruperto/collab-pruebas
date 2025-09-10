@@ -44,7 +44,7 @@ def load_model(model_name="google/flan-t5-large"):
             device_map="auto" if device == "cuda" else None,
             torch_dtype=torch.float16 if device == "cuda" else torch.float32
         )
-        print("✅ Modelo cargado exitosamente")
+        print("✅ Modelo cargado correctamente")
     except Exception as e:
         print(f"❌ Error cargando modelo: {e}")
 
