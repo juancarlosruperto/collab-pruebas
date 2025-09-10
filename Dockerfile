@@ -1,17 +1,22 @@
+# Dockerfile
 FROM python:3.9-slim
 
-# Crear directorio de trabajo
 WORKDIR /app
 
 # Copiar dependencias e instalarlas
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar el código
+# Copiar todo el código
 COPY . .
 
-# Exponer el puerto
-EXPOSE 8020
+# Copiar el start.sh y darle permisos
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
 
-# Comando para iniciar FastAPI con uvicorn
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8020"]
+# Exponer puerto
+EXPOSE 8888  # Nota: start.sh usa 8888
+
+# Comando para iniciar la app
+CMD ["/app/start.sh"]
+
