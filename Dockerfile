@@ -15,7 +15,8 @@ COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
 # Exponer puerto
-EXPOSE 8888  # Nota: start.sh usa 8888
+# Nota: start.sh usa 8020
+EXPOSE 8020
 
 # Comando para iniciar la app
 CMD ["/app/start.sh"]
