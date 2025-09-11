@@ -51,6 +51,7 @@ def load_model(model_name="google/flan-t5-large"):
     )
     print("✅ Modelo cargado exitosamente")
 
+# Cargar modelo al inicio
 load_model()
 
 # -----------------------------
@@ -80,21 +81,25 @@ def extraer_metricas_del_prompt(prompt: str) -> Dict[str, Any]:
     return metricas
 
 # -----------------------------
-# Función para parsear salida del modelo
+# Parseo seguro del modelo
 # -----------------------------
 def parse_model_output(text: str) -> Dict[str, str]:
     """
     Convierte texto libre en diccionario seguro usando secciones clave: 
     summary, cpu_analysis, memory_analysis, processes_issues, firewall_ports, active_users, recommendations
     """
-    result = {}
     keys = ["summary", "cpu_analysis", "memory_analysis", "processes_issues", "firewall_ports", "active_users", "recommendations"]
-    for key in keys:
-        match = re.search(rf"{key}\s*:\s*(.*?)(?=\n\w+:|$)", text, re.DOTALL | re.IGNORECASE)
-        if match:
-            result[key] = match.group(1).strip()
-        else:
-            result[key] = ""  # si no existe, ponemos string vacío
+    result = {k: "" for k in keys}  # inicializamos vacíos
+    try:
+        # Intentamos parsear JSON directamente
+        result.update(json.loads(text))
+    except Exception:
+        # Si falla, extraemos por secciones manualmente
+        for key in keys:
+            match = re.search(rf"{key}\s*:\s*(.*?)(?=\n\w+:|$)", text, re.DOTALL | re.IGNORECASE)
+            if match:
+                result[key] = match.group(1).strip()
+        result["raw_text"] = text  # guardamos crudo por depuración
     return result
 
 # -----------------------------
@@ -106,13 +111,13 @@ async def analizar_sistema(request: PromptRequest):
         if model is None or tokenizer is None:
             raise HTTPException(status_code=500, detail="Modelo no cargado")
 
-        # Prompt optimizado
+        # Prompt optimizado para JSON
         input_text = f"""
 You are an expert system administrator and cybersecurity analyst.
 Analyze the following system health report (Linux or Windows).
-Provide the output in clearly separated sections with the following labels:
-summary, cpu_analysis, memory_analysis, processes_issues, firewall_ports, active_users, recommendations.
-Do not add extra text outside these labels.
+Return the output as a valid JSON with keys:
+"summary", "cpu_analysis", "memory_analysis", "processes_issues", "firewall_ports", "active_users", "recommendations".
+Do not include any extra text outside the JSON object.
 Here is the report:
 {request.prompt}
 """
