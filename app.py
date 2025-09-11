@@ -10,7 +10,7 @@ import torch
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
 # -----------------------------
-# Configuración de FastAPI
+# Configuración FastAPI
 # -----------------------------
 app = FastAPI(title="AI System Analysis API", version="1.0.0")
 
@@ -41,24 +41,20 @@ tokenizer = None
 # -----------------------------
 def load_model(model_name="google/flan-t5-large"):
     global model, tokenizer
-    try:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"➡️ Cargando modelo {model_name} en {device}")
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForSeq2SeqLM.from_pretrained(
-            model_name,
-            device_map="auto" if device == "cuda" else None,
-            torch_dtype=torch.float16 if device == "cuda" else torch.float32
-        )
-        print("✅ Modelo cargado exitosamente")
-    except Exception as e:
-        print(f"❌ Error cargando modelo: {e}")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"➡️ Cargando modelo {model_name} en {device}")
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForSeq2SeqLM.from_pretrained(
+        model_name,
+        device_map="auto" if device == "cuda" else None,
+        torch_dtype=torch.float16 if device == "cuda" else torch.float32
+    )
+    print("✅ Modelo cargado exitosamente")
 
-# Cargar modelo al inicio
 load_model()
 
 # -----------------------------
-# Función para extraer métricas
+# Extraer métricas del prompt
 # -----------------------------
 def extraer_metricas_del_prompt(prompt: str) -> Dict[str, Any]:
     metricas = {}
@@ -75,15 +71,31 @@ def extraer_metricas_del_prompt(prompt: str) -> Dict[str, Any]:
             metricas['memory_total_mb'] = total
             metricas['memory_available_mb'] = available
             metricas['memory_utilization_percent'] = round((total - available) / total * 100, 2)
-        
+
         # Detectar tipo de OS
-        if re.search(r'Windows', prompt, re.IGNORECASE):
-            metricas['os_type'] = 'Windows'
-        else:
-            metricas['os_type'] = 'Linux'
+        metricas['os_type'] = 'Windows' if re.search(r'Windows', prompt, re.IGNORECASE) else 'Linux'
+
     except Exception as e:
         print(f"Error extrayendo métricas: {e}")
     return metricas
+
+# -----------------------------
+# Función para parsear salida del modelo
+# -----------------------------
+def parse_model_output(text: str) -> Dict[str, str]:
+    """
+    Convierte texto libre en diccionario seguro usando secciones clave: 
+    summary, cpu_analysis, memory_analysis, processes_issues, firewall_ports, active_users, recommendations
+    """
+    result = {}
+    keys = ["summary", "cpu_analysis", "memory_analysis", "processes_issues", "firewall_ports", "active_users", "recommendations"]
+    for key in keys:
+        match = re.search(rf"{key}\s*:\s*(.*?)(?=\n\w+:|$)", text, re.DOTALL | re.IGNORECASE)
+        if match:
+            result[key] = match.group(1).strip()
+        else:
+            result[key] = ""  # si no existe, ponemos string vacío
+    return result
 
 # -----------------------------
 # Endpoint principal
@@ -94,20 +106,13 @@ async def analizar_sistema(request: PromptRequest):
         if model is None or tokenizer is None:
             raise HTTPException(status_code=500, detail="Modelo no cargado")
 
-        # Prompt mejorado para análisis completo y recomendaciones
+        # Prompt optimizado
         input_text = f"""
 You are an expert system administrator and cybersecurity analyst.
 Analyze the following system health report (Linux or Windows).
-Provide a JSON with the following fields:
-- summary
-- cpu_analysis
-- memory_analysis
-- processes_issues
-- firewall_ports
-- active_users
-- recommendations
-
-Ensure the JSON is valid and properly structured.
+Provide the output in clearly separated sections with the following labels:
+summary, cpu_analysis, memory_analysis, processes_issues, firewall_ports, active_users, recommendations.
+Do not add extra text outside these labels.
 Here is the report:
 {request.prompt}
 """
@@ -121,18 +126,15 @@ Here is the report:
             outputs = model.generate(
                 inputs["input_ids"],
                 max_length=2000,
-                num_beams=3,
-                early_stopping=True
+                num_beams=5,
+                early_stopping=True,
+                do_sample=False
             )
 
         respuesta = tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-        # Intentar parsear JSON del modelo
-        try:
-            analisis_detallado = json.loads(respuesta)
-        except Exception:
-            analisis_detallado = {"raw_text": respuesta}
-
+        # Parseo seguro
+        analisis_detallado = parse_model_output(respuesta)
         metricas = extraer_metricas_del_prompt(request.prompt)
 
         return {
