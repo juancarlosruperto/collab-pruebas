@@ -86,7 +86,8 @@ async def analizar_sistema(request: PromptRequest):
         inputs = {k: v.to(model.device) for k, v in inputs.items()}
 
         with torch.no_grad():
-            outputs = model.generate(inputs["input_ids"], max_length=600, temperature=0.4)
+            outputs = model.generate(inputs["input_ids"], max_length=600)
+            #outputs = model.generate(inputs["input_ids"], max_length=600, temperature=0.4)
 
         respuesta = tokenizer.decode(outputs[0], skip_special_tokens=True)
         metricas = extraer_metricas_del_prompt(request.prompt)
